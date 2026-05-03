@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro - Equilibrio Estudiantil</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Arial',sans-serif;
+  background:#0f2027;
+  height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+}
+.card{
+  width:360px;
+  padding:36px 30px;
+  border-radius:20px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.12);
+}
+.logo{text-align:center;margin-bottom:20px}
+.logo-circle{
+  width:72px;height:72px;border-radius:50%;
+  background:#85B7EB;margin:0 auto 10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:30px;
+}
+.logo h1{font-size:16px;font-weight:500;color:#85B7EB}
+.logo p{font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px}
+
+.form-group{margin-bottom:14px}
+.form-group input{
+  width:100%;padding:12px 14px;
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:10px;
+  background:rgba(255,255,255,0.1);
+  color:#fff;font-size:14px;
+}
+.form-group input::placeholder{color:rgba(255,255,255,0.4)}
+.form-group input:focus{outline:none;border-color:#85B7EB}
+
+.btn{
+  width:100%;padding:12px;border:none;
+  border-radius:10px;
+  background:#85B7EB;color:#042C53;
+  font-size:14px;font-weight:500;cursor:pointer;
+  margin-top:4px;transition:opacity .15s;
+}
+.btn:hover{opacity:.88}
+
+#mensaje{
+  text-align:center;font-size:13px;
+  margin-top:12px;min-height:20px;color:#FAC775;
+}
+
+.login-link{
+  text-align:center;font-size:12px;
+  margin-top:14px;color:rgba(255,255,255,0.5);
+}
+.login-link a{
+  color:#85B7EB;
+  text-decoration:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+  <div class="logo">
+    <div class="logo-circle">👤</div>
+    <h1>Crear cuenta</h1>
+    <p>Empieza tu bienestar</p>
+  </div>
+
+  <div class="form-group">
+    <input type="text" id="nombre" placeholder="Nombre completo">
+  </div>
+
+  <div class="form-group">
+    <input type="email" id="email" placeholder="Correo">
+  </div>
+
+  <div class="form-group">
+    <input type="password" id="password" placeholder="Contraseña">
+  </div>
+
+  <button class="btn" onclick="registrar()">Registrarse</button>
+
+  <p id="mensaje"></p>
+
+  <div class="login-link">
+    ¿Ya tienes cuenta? <a href="index.html">Inicia sesión</a>
+  </div>
+
+</div>
+
+<script>
+const API = "http://localhost:5000";
+
+function registrar() {
+  const nombre = document.getElementById("nombre").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const msg = document.getElementById("mensaje");
+
+  if (!nombre || !email || !password) {
+    msg.innerText = "Completa todos los campos";
+    return;
+  }
+
+  fetch(`${API}/usuarios`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ nombre, email, password })
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data;
+  })
+  .then(() => {
+    msg.style.color = "#9FE1CB";
+    msg.innerText = "Cuenta creada correctamente";
+
+    setTimeout(() => {
+      window.location.href = "index.html";
+    }, 1000);
+  })
+  .catch(err => {
+    msg.style.color = "#F09595";
+    msg.innerText = err.message || "Error al registrar";
+  });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Equilibrio Estudiantil</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}
+body{background:#f0f4f8;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.layout{display:flex;width:700px;min-height:420px;border-radius:16px;overflow:hidden;border:1px solid #ddd;background:#fff}
+.sidebar{width:180px;background:#85B7EB;display:flex;flex-direction:column;align-items:center;padding:24px 12px;gap:16px}
+.logo-box{width:110px;height:110px;background:#fff;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.logo-icon{font-size:40px}
+.logo-text{font-size:11px;font-weight:bold;color:#185FA5;text-align:center;line-height:1.3}
+.nav-link{font-size:11px;color:#042C53;cursor:pointer;text-decoration:none;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.3);width:100%;text-align:center;display:block}
+.nav-link:hover{background:rgba(255,255,255,0.5)}
+.main{flex:1;padding:20px;display:flex;flex-direction:column;gap:14px;background:#f7f9fb}
+.greeting-card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:14px 18px}
+.greeting-card h2{font-size:18px;font-weight:600;color:#222;margin-bottom:4px}
+.greeting-card p{font-size:12px;color:#666}
+.stats-row,.actions-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.stat-btn,.action-btn{border:none;cursor:pointer;border-radius:10px;padding:14px 8px;font-size:13px;font-weight:bold;transition:opacity .15s}
+.stat-btn:hover,.action-btn:hover{opacity:.85}
+.stat-blue{background:#85B7EB;color:#042C53}
+.stat-pink{background:#ED93B1;color:#4B1528}
+.stat-yellow{background:#FAC775;color:#412402}
+.act-blue{background:#85B7EB;color:#042C53}
+.act-yellow{background:#FAC775;color:#412402}
+.act-pink{background:#ED93B1;color:#4B1528}
+.mood-card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:14px 18px}
+.mood-label{font-size:13px;font-weight:bold;color:#333;margin-bottom:10px}
+.mood-bar-track{height:12px;background:#e8e8e8;border-radius:6px;overflow:hidden}
+.mood-bar-fill{height:100%;width:50%;background:#1D9E75;border-radius:6px;transition:width .5s}
+.mood-estado{font-size:11px;color:#666;margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="logo-box">
+      <div class="logo-icon">&#x1F4D6;</div>
+      <div class="logo-text">Equilibrio<br>Estudiantil</div>
+    </div>
+    <a class="nav-link" href="Dashboard.html">Dashboard</a>
+    <a class="nav-link" href="animo.html">Estado de ánimo</a>
+    <a class="nav-link" href="sugerencias.html">Sugerencias</a>
+    <a class="nav-link" onclick="logout()">Cerrar sesión</a>
+  </div>
+
+  <div class="main">
+    <div class="greeting-card">
+      <h2 id="saludo">Hola</h2>
+      <p id="fecha"></p>
+    </div>
+
+    <div class="stats-row">
+      <button class="stat-btn stat-blue" id="btn-pomodoro">Pomodoro: 0</button>
+      <button class="stat-btn stat-pink">Concentración</button>
+      <button class="stat-btn stat-yellow" id="btn-alertas">Alertas: 0</button>
+    </div>
+
+    <div class="mood-card">
+      <div class="mood-label">Estado de ánimo actual</div>
+      <div class="mood-bar-track">
+        <div class="mood-bar-fill" id="barra"></div>
+      </div>
+      <div class="mood-estado" id="mood-texto">Sin registrar</div>
+    </div>
+
+    <div class="actions-row">
+      <button class="action-btn act-blue" onclick="window.location.href='animo.html'">Inicio de jornada</button>
+      <button class="action-btn act-yellow" onclick="registrarMood('normal')">Registrar ánimo</button>
+      <button class="action-btn act-pink" onclick="window.location.href='sugerencias.html'">Ver sugerencias</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:5000";
+
+const usuario = JSON.parse(localStorage.getItem("usuario"));
+if (!usuario) { window.location.href = "index.html"; }
+
+document.getElementById("saludo").innerText = "Hola " + usuario.nombre;
+
+const hoy = new Date();
+const dias = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+document.getElementById("fecha").innerText =
+  dias[hoy.getDay()] + " " + hoy.toLocaleDateString("es-CO", {day:"numeric",month:"long"}) + " · semana 12 del semestre";
+
+function registrarMood(estado) {
+  fetch(`${API}/mood`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({estado})
+  })
+  .then(res => res.json())
+  .then(data => {
+    let pct = 50;
+    if (estado === "feliz") pct = 90;
+    if (estado === "normal") pct = 60;
+    if (estado === "estresado") pct = 25;
+    const barra = document.getElementById("barra");
+    barra.style.width = pct + "%";
+    barra.style.background = estado === "feliz" ? "#1D9E75" : estado === "estresado" ? "#E24B4A" : "#378ADD";
+    document.getElementById("mood-texto").innerText = "Estado: " + estado;
+  })
+  .catch(() => alert("Error guardando estado de ánimo"));
+}
+
+function cargarMoods() {
+  fetch(`${API}/mood`)
+    .then(res => res.json())
+    .then(data => {
+      const total = data.data?.total || 0;
+      document.getElementById("btn-alertas").innerText = "Alertas: " + total;
+      if (total > 0) {
+        const ultimo = data.data.items[total - 1];
+        let pct = 60;
+        if (ultimo.estado === "feliz") pct = 90;
+        if (ultimo.estado === "estresado") pct = 25;
+        document.getElementById("barra").style.width = pct + "%";
+        document.getElementById("mood-texto").innerText = "Último: " + ultimo.estado;
+      }
+    })
+    .catch(() => {});
+}
+
+function logout() {
+  localStorage.removeItem("usuario");
+  window.location.href = "index.html";
+}
+
+cargarMoods();
+</script>
+
+</body>
+</html>

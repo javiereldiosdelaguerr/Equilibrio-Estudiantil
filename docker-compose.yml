@@ -1,0 +1,72 @@
+services:
+
+  db:
+    image: mysql:5.7
+    container_name: mysql_db
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  usuarios:
+    build: ./usuarios
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  moods:
+    build: ./moods
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  sesiones:
+    build: ./sesiones
+    ports:
+      - "5003:5003"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  recomendaciones:
+    build: ./recomendaciones
+    ports:
+      - "5004:5004"
+    env_file:
+      - .env
+    depends_on:
+      - moods
+      - sesiones
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "5000:5000"
+    depends_on:
+      - usuarios
+      - moods
+      - sesiones
+      - recomendaciones
+
+  frontend:
+    image: nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - gateway
+
+volumes:
+  db_data:
