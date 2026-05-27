@@ -1,0 +1,10 @@
+CREATE DATABASE IF NOT EXISTS db_sesiones;
+USE db_sesiones;
+CREATE TABLE IF NOT EXISTS sesiones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_id INT NOT NULL,
+    duracion INT DEFAULT 25,
+    estado VARCHAR(20) DEFAULT 'activa',
+    inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
+    fin DATETIME NULL
+);

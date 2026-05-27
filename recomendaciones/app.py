@@ -1,62 +1,64 @@
 from flask import Flask, jsonify
-import requests
+import mysql.connector, requests as req, os
+from observability import get_logger, init_observability, CircuitBreaker, CircuitOpenError
 
-app = Flask(__name__)
+app     = Flask(__name__)
+logger  = get_logger("recomendaciones")
+tracker = init_observability(app, "recomendaciones")
 
-MOODS_URL = "http://moods:5002"
-SESIONES_URL = "http://sesiones:5003"
+cb_moods    = CircuitBreaker("moods",    failure_threshold=3, recovery_timeout=30, logger=logger)
+cb_sesiones = CircuitBreaker("sesiones", failure_threshold=3, recovery_timeout=30, logger=logger)
 
+def get_db():
+    return mysql.connector.connect(
+        host=os.getenv("DB_HOST","db-recomendaciones"), user=os.getenv("DB_USER","root"),
+        password=os.getenv("DB_PASSWORD",""), database=os.getenv("DB_NAME","db_recomendaciones"),
+        autocommit=True)
 
-@app.route("/")
-def home():
-    return "Servicio recomendaciones funcionando"
-
-
-@app.route("/recomendacion/<int:usuario_id>", methods=["GET"])
-def recomendar(usuario_id):
+def fetch(cb, url):
     try:
-        mood_res = requests.get(f"{MOODS_URL}/mood", timeout=5)
-        moods_data = mood_res.json().get("data", {}).get("items", [])
+        r = cb.call(req.get, url, timeout=5)
+        return r.json().get("data",{}).get("items",[])
+    except (CircuitOpenError, Exception) as e:
+        logger.warning(str(e), extra={"circuit": cb.name})
+        return []
 
-        ses_res = requests.get(f"{SESIONES_URL}/sesiones", timeout=5)
-        sesiones_data = ses_res.json().get("data", {}).get("items", [])
+@app.route("/recomendacion/<int:uid>")
+def recomendar(uid):
+    moods    = fetch(cb_moods,    f"http://moods:5002/mood?usuario_id={uid}")
+    sesiones = fetch(cb_sesiones, f"http://sesiones:5003/sesiones?usuario_id={uid}")
 
-        ultimo_estado = None
-        sesiones_usuario = []
+    estado = moods[0]["estado"] if moods else None
+    texto  = {"estresado": "Toma un descanso de 10 minutos",
+               "normal":    "Puedes continuar estudiando",
+               "feliz":     "Aprovecha tu energía para avanzar más"}.get(estado, "Registra tu estado de ánimo")
+    if len(sesiones) >= 4:
+        texto = "Has trabajado mucho hoy, descansa"
 
-        for m in moods_data:
-            if m["usuario_id"] == usuario_id:
-                ultimo_estado = m["estado"]
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("INSERT INTO recomendaciones (usuario_id,estado_mood,total_sesiones,recomendacion) VALUES (%s,%s,%s,%s)",
+                    (uid, estado, len(sesiones), texto))
+        cur.close(); conn.close()
+    except Exception as e:
+        logger.error(str(e))
 
-        for s in sesiones_data:
-            if s["usuario_id"] == usuario_id:
-                sesiones_usuario.append(s)
+    logger.info("Recomendación generada", extra={"usuario_id": uid})
+    return jsonify({"usuario_id":uid,"estado":estado,"sesiones":len(sesiones),"recomendacion":texto})
 
-        if ultimo_estado == "estresado":
-            recomendacion = "Toma un descanso de 10 minutos"
-        elif ultimo_estado == "normal":
-            recomendacion = "Puedes continuar estudiando"
-        elif ultimo_estado == "feliz":
-            recomendacion = "Aprovecha tu energía para avanzar más"
-        else:
-            recomendacion = "Registra tu estado de ánimo"
+@app.route("/recomendaciones/<int:uid>")
+def historial(uid):
+    conn = get_db(); cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM recomendaciones WHERE usuario_id=%s ORDER BY generada_en DESC", (uid,))
+    rows = cur.fetchall()
+    for r in rows:
+        if r.get("generada_en"): r["generada_en"] = str(r["generada_en"])
+    cur.close(); conn.close()
+    return jsonify({"status":"success","data":{"items":rows}})
 
-        if len(sesiones_usuario) >= 4:
-            recomendacion = "Has trabajado mucho, descansa un poco"
-
-        return jsonify({
-            "usuario_id": usuario_id,
-            "estado": ultimo_estado,
-            "sesiones": len(sesiones_usuario),
-            "recomendacion": recomendacion
-        })
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({
-            "error": "No se pudo generar la recomendación",
-            "detalle": str(e)
-        }), 500
-
+@app.route("/circuits")
+def circuits():
+    return jsonify([cb_moods.status(), cb_sesiones.status()])
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5004)

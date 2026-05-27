@@ -1,72 +1,150 @@
 services:
 
-  db:
+
+  db-usuarios:
     image: mysql:5.7
-    container_name: mysql_db
+    container_name: db_usuarios
     restart: always
-    env_file:
-      - .env
-    ports:
-      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: db_usuarios
     volumes:
-      - db_data:/var/lib/mysql
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - data_usuarios:/var/lib/mysql
+      - ./db/init_usuarios.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [red-usuarios]
+
+  db-moods:
+    image: mysql:5.7
+    container_name: db_moods
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: db_moods
+    volumes:
+      - data_moods:/var/lib/mysql
+      - ./db/init_moods.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [red-moods]
+
+  db-sesiones:
+    image: mysql:5.7
+    container_name: db_sesiones
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: db_sesiones
+    volumes:
+      - data_sesiones:/var/lib/mysql
+      - ./db/init_sesiones.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [red-sesiones]
+
+  db-recomendaciones:
+    image: mysql:5.7
+    container_name: db_recomendaciones
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: db_recomendaciones
+    volumes:
+      - data_recomendaciones:/var/lib/mysql
+      - ./db/init_recomendaciones.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [red-recomendaciones]
+
+  db-notificaciones:
+    image: mysql:5.7
+    container_name: db_notificaciones
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: db_notificaciones
+    volumes:
+      - data_notificaciones:/var/lib/mysql
+      - ./db/init_notificaciones.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [red-notificaciones]
 
   usuarios:
     build: ./usuarios
-    ports:
-      - "5001:5001"
-    env_file:
-      - .env
-    depends_on:
-      - db
+    container_name: svc_usuarios
+    restart: always
+    ports: ["5001:5001"]
+    environment:
+      DB_HOST: db-usuarios
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      DB_NAME: db_usuarios
+    depends_on: [db-usuarios]
+    networks: [red-usuarios, red-gateway]
 
   moods:
     build: ./moods
-    ports:
-      - "5002:5002"
-    env_file:
-      - .env
-    depends_on:
-      - db
+    container_name: svc_moods
+    restart: always
+    ports: ["5002:5002"]
+    environment:
+      DB_HOST: db-moods
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      DB_NAME: db_moods
+    depends_on: [db-moods]
+    networks: [red-moods, red-gateway]
 
   sesiones:
     build: ./sesiones
-    ports:
-      - "5003:5003"
-    env_file:
-      - .env
-    depends_on:
-      - db
+    container_name: svc_sesiones
+    restart: always
+    ports: ["5003:5003"]
+    environment:
+      DB_HOST: db-sesiones
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      DB_NAME: db_sesiones
+    depends_on: [db-sesiones]
+    networks: [red-sesiones, red-gateway]
 
   recomendaciones:
     build: ./recomendaciones
-    ports:
-      - "5004:5004"
-    env_file:
-      - .env
-    depends_on:
-      - moods
-      - sesiones
+    container_name: svc_recomendaciones
+    restart: always
+    ports: ["5004:5004"]
+    environment:
+      DB_HOST: db-recomendaciones
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      DB_NAME: db_recomendaciones
+    depends_on: [db-recomendaciones, moods, sesiones]
+    networks: [red-recomendaciones, red-gateway]
+
+  notificaciones:
+    build: ./notificaciones
+    container_name: svc_notificaciones
+    restart: always
+    ports: ["5005:5005"]
+    environment:
+      DB_HOST: db-notificaciones
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      DB_NAME: db_notificaciones
+    depends_on: [db-notificaciones]
+    networks: [red-notificaciones, red-gateway]
 
   gateway:
     build: ./gateway
-    ports:
-      - "5000:5000"
-    depends_on:
-      - usuarios
-      - moods
-      - sesiones
-      - recomendaciones
+    container_name: svc_gateway
+    restart: always
+    ports: ["5000:5000"]
+    depends_on: [usuarios, moods, sesiones, recomendaciones, notificaciones]
+    networks: [red-gateway]
 
-  frontend:
-    image: nginx
-    ports:
-      - "8080:80"
-    volumes:
-      - ./frontend:/usr/share/nginx/html
-    depends_on:
-      - gateway
+networks:
+  red-usuarios:
+  red-moods:
+  red-sesiones:
+  red-recomendaciones:
+  red-notificaciones:
+  red-gateway:
 
 volumes:
-  db_data:
+  data_usuarios:
+  data_moods:
+  data_sesiones:
+  data_recomendaciones:
+  data_notificaciones:

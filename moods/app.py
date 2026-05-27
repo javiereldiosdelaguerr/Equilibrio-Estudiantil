@@ -1,57 +1,45 @@
 from flask import Flask, request, jsonify
+import mysql.connector, os
+from observability import get_logger, init_observability
 
-app = Flask("moods-service")
+app     = Flask(__name__)
+logger  = get_logger("moods")
+tracker = init_observability(app, "moods")
 
-moods = []
+def get_db():
+    return mysql.connector.connect(
+        host=os.getenv("DB_HOST","db-moods"), user=os.getenv("DB_USER","root"),
+        password=os.getenv("DB_PASSWORD",""), database=os.getenv("DB_NAME","db_moods"),
+        autocommit=True)
 
-def error_response(message, status_code=400):
-    return jsonify({"status": "error", "message": message}), status_code
+def serial(r):
+    if r and r.get("creado_en"): r["creado_en"] = str(r["creado_en"])
+    return r
 
-def success_response(data=None, message=None, status_code=200):
-    response = {"status": "success"}
-    if message:
-        response["message"] = message
-    if data is not None:
-        response["data"] = data
-    return jsonify(response), status_code
-
-
-@app.route('/mood', methods=['POST'])
+@app.route("/mood", methods=["POST"])
 def create_mood():
-    payload = request.get_json(silent=True)
+    p = request.get_json(silent=True) or {}
+    estado, uid = p.get("estado"), p.get("usuario_id")
+    if not all([estado, uid]):
+        return jsonify({"error":"estado y usuario_id son obligatorios"}), 400
+    conn = get_db(); cur = conn.cursor(dictionary=True)
+    cur.execute("INSERT INTO moods (usuario_id,estado) VALUES (%s,%s)", (uid, estado))
+    mid = cur.lastrowid
+    cur.execute("SELECT * FROM moods WHERE id=%s", (mid,))
+    mood = serial(cur.fetchone()); cur.close(); conn.close()
+    logger.info("Mood creado", extra={"usuario_id": uid})
+    return jsonify({"status":"success","data":mood}), 201
 
-    if not payload:
-        return error_response("Se requiere JSON")
-
-    estado = payload.get("estado")
-    usuario_id = payload.get("usuario_id")
-
-    if not estado or not usuario_id:
-        return error_response("estado y usuario_id son obligatorios")
-
-    mood = {
-        "id": len(moods) + 1,
-        "usuario_id": usuario_id,
-        "estado": estado
-    }
-
-    moods.append(mood)
-
-    return success_response(mood, "Mood guardado", 201)
-
-
-@app.route('/mood', methods=['GET'])
+@app.route("/mood", methods=["GET"])
 def list_moods():
-    return success_response({
-        "total": len(moods),
-        "items": moods
-    })
+    uid = request.args.get("usuario_id")
+    conn = get_db(); cur = conn.cursor(dictionary=True)
+    if uid:
+        cur.execute("SELECT * FROM moods WHERE usuario_id=%s ORDER BY creado_en DESC", (uid,))
+    else:
+        cur.execute("SELECT * FROM moods ORDER BY creado_en DESC")
+    rows = [serial(r) for r in cur.fetchall()]; cur.close(); conn.close()
+    return jsonify({"status":"success","data":{"total":len(rows),"items":rows}})
 
-
-@app.route('/')
-def health():
-    return success_response(message="Servicio moods operativo")
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5002)
